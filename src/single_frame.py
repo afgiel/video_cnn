@@ -12,6 +12,7 @@ BATCH_SIZE = 100
 NUM_HIDDEN_UNITS = 256
 LEARNING RATE = 0.01
 MOMENTUM = 0.9
+REG = 0.001
 
 def build_model(input_dim, output_dim, 
                 batch_size=BATCH_SIZE, num_hidden_units=NUM_HIDDEN_UNITS):
@@ -47,7 +48,8 @@ def create_iter_functions(dataset, output_layer,
                           X_tensor_type=T.matrix,
                           batch_size=BATCH_SIZE,
                           learning_rate=LEARNING_RATE,
-                          momentum=MOMENTUM):
+                          momentum=MOMENTUM,
+                          reg_strength=REG_STRENGTH):
     batch_index = T.iscalar('batch_index')
     X_batch = X_tensor_type('x')
     y_batch = T.ivector('y')
@@ -56,7 +58,8 @@ def create_iter_functions(dataset, output_layer,
 
     objective = lasagne.objectives.Objective(output_layer, loss_function=lasagne.objectives.multinomial_nll)
 
-    loss_train = objective.get_loss(X_batch, target=y_batch)
+    reg = lasagne.regularization.l2(output_layer) 
+    loss_train = objective.get_loss(X_batch, target=y_batch) + REG_STRENGTH*reg
     loss_eval = objective.get_loss(X_batch, target=y_batch, deterministic=True)
 
     pred = T.argmax(output_layer.get_output(X_batch, deterministic=True), axis=1)
