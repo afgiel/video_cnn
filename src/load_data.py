@@ -62,6 +62,13 @@ def load_data():
     X_test = np.array(X_test)
     y_test = np.array(y_test)
     print 'test numpy-ized'
+    
+    # change shape of X, y for single frame usage
+    X_train, y_train = reshape_for_single_frame(X_train, y_train)
+    X_valid, y_valid = reshape_for_single_frame(X_valid, y_valid)
+    X_test, y_test = reshape_for_single_frame(X_test, y_test)
+
+
 
     return dict(
         X_train=X_train,#theano.shared(lasagne.utils.floatX(X_train)),
@@ -73,8 +80,21 @@ def load_data():
         num_examples_train=X_train.shape[0],
         num_examples_valid=X_valid.shape[0],
         num_examples_test=X_test.shape[0],
-        input_dim=X_train.shape[1],
+        input_dim=X_train.shape,
         output_dim=101,
         )
 
-x = load_data()
+# expects X of size (N, F, C, H, W)
+# expects y of size (N)
+# returns X of size (N * F, C, H, W)
+# returns y of size (N * F)
+def reshape_for_single_frame(X, y):
+  X_shape = X.shape
+  y_shape = y.shape
+  new_X = X.reshape((X_shape[0] * X_shape[1], X_shape[2], X_shape[3], X_shape[4]))
+  new_y = np.zeros((y_shape[0] * X_shape[1]))
+  for i in xrange(y_shape[0]):
+    j = i * X_shape[1]
+    new_y[j:j+X_shape[1]] = y[i]
+  return new_X, new_y
+

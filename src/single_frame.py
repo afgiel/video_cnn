@@ -10,15 +10,15 @@ import theano.tensor as T
 NUM_EPOCHS = 10
 BATCH_SIZE = 100
 NUM_HIDDEN_UNITS = 256
-LEARNING RATE = 0.01
+LEARNING_RATE = 0.01
 MOMENTUM = 0.9
-REG = 0.001
+REG_STRENGTH = 0.001
 
 def build_model(input_dim, output_dim, 
                 batch_size=BATCH_SIZE, num_hidden_units=NUM_HIDDEN_UNITS):
-
+    print input_dim
     l_in = lasagne.layers.InputLayer(
-          shape = (batch_size, input_dim),
+          shape=(batch_size, input_dim),
           )
     l_conv1 = lasagne.layers.Conv2DLayer(
             l_in,
@@ -27,10 +27,12 @@ def build_model(input_dim, output_dim,
             nonlinearity=lasagne.nonlinearities.rectify,
             W=lasagne.init.Uniform(),
             )
+    print l_conv1.input_shape
+    print l_conv1.output_shape
     l_pool1 = lasagne.layers.MaxPool2DLayer(l_conv1, ds=(2, 2))
     l_hidden1 = lasagne.layers.DenseLayer(
             l_pool2,
-            num_units=256,
+            num_units=num_hidden_units,
             nonlinearity=lasagne.nonlinearities.rectify,
             W=lasagne.init.Uniform(),
             )
