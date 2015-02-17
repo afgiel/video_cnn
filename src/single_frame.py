@@ -1,37 +1,38 @@
 # our imports 
 import load_data
 
+# general imports 
+import itertools
+import time
+
 # scientific imports
 import numpy as np
 import lasagne
 import theano 
 import theano.tensor as T
 
-NUM_EPOCHS = 10
+NUM_EPOCHS = 5
 BATCH_SIZE = 100
 NUM_HIDDEN_UNITS = 256
-LEARNING_RATE = 0.01
+LEARNING_RATE = 0.00001
 MOMENTUM = 0.9
-REG_STRENGTH = 0.001
+REG_STRENGTH = 0.00001
 
 def build_model(input_dim, output_dim, 
                 batch_size=BATCH_SIZE, num_hidden_units=NUM_HIDDEN_UNITS):
-    print input_dim
     l_in = lasagne.layers.InputLayer(
-          shape=(batch_size, input_dim),
+          shape=(batch_size, input_dim[1], input_dim[2], input_dim[3]),
           )
     l_conv1 = lasagne.layers.Conv2DLayer(
             l_in,
             num_filters=32,
             filter_size=(5, 5),
             nonlinearity=lasagne.nonlinearities.rectify,
-            W=lasagne.init.Uniform(),
+            W=lasagne.init.Uniform()
             )
-    print l_conv1.input_shape
-    print l_conv1.output_shape
     l_pool1 = lasagne.layers.MaxPool2DLayer(l_conv1, ds=(2, 2))
     l_hidden1 = lasagne.layers.DenseLayer(
-            l_pool2,
+            l_pool1,
             num_units=num_hidden_units,
             nonlinearity=lasagne.nonlinearities.rectify,
             W=lasagne.init.Uniform(),
@@ -47,7 +48,7 @@ def build_model(input_dim, output_dim,
     return l_out
 
 def create_iter_functions(dataset, output_layer,
-                          X_tensor_type=T.matrix,
+                          X_tensor_type=T.tensor4,
                           batch_size=BATCH_SIZE,
                           learning_rate=LEARNING_RATE,
                           momentum=MOMENTUM,
@@ -70,6 +71,7 @@ def create_iter_functions(dataset, output_layer,
     all_params = lasagne.layers.get_all_params(output_layer)
     updates = lasagne.updates.nesterov_momentum(
       loss_train, all_params, learning_rate, momentum)
+    
 
     iter_train = theano.function(
       [batch_index], loss_train,
@@ -110,8 +112,13 @@ def train(iter_funcs, dataset, batch_size=BATCH_SIZE):
     for epoch in itertools.count(1):
         batch_train_losses = []
         for b in range(num_batches_train):
+            print '\tbatch %d of %d' % (b, num_batches_train)
+            tick = time.time()
             batch_train_loss = iter_funcs['train'](b)
             batch_train_losses.append(batch_train_loss)
+            toc = time.time()
+            print '\t\t loss: %f' % (batch_train_loss)
+            print '\t\t took %f' % (toc - tick)
 
         avg_train_loss = np.mean(batch_train_losses)
 
@@ -133,11 +140,14 @@ def train(iter_funcs, dataset, batch_size=BATCH_SIZE):
             }
 
 def main(num_epochs=NUM_EPOCHS):
+  print 'LOADING DATA'
   dataset = load_data.load_data()
+  print 'BUILDING MODEL'
   output_layer = build_model(
     input_dim = dataset['input_dim'],
     output_dim = dataset['output_dim'],
     )
+  print 'CREATING ITER FUNCS'
   iter_funcs = create_iter_functions(dataset, output_layer)
 
   print 'TRAINING'

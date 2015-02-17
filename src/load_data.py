@@ -47,36 +47,32 @@ def _load_data():
 
 def load_data():
     #data = _load_data()
-    print 'pickling '
+    print '\tunpickling'
     data = pickle.load(open('../data/small_data.pickle'))
-    print 'done pickled' 
+    print '\tnumpying' 
     X_train, y_train = data[0]
     X_valid, y_valid = data[1]
     X_test, y_test = data[2]
     X_train = np.array(X_train)
     y_train = np.array(y_train)
-    print 'train numpy-ized'
     X_valid = np.array(X_valid)
     y_valid = np.array(y_valid)
-    print 'val numpy-ized'
     X_test = np.array(X_test)
     y_test = np.array(y_test)
-    print 'test numpy-ized'
     
     # change shape of X, y for single frame usage
     X_train, y_train = reshape_for_single_frame(X_train, y_train)
     X_valid, y_valid = reshape_for_single_frame(X_valid, y_valid)
     X_test, y_test = reshape_for_single_frame(X_test, y_test)
 
-
-
+    print '\tcreating theano shared vars'
     return dict(
-        X_train=X_train,#theano.shared(lasagne.utils.floatX(X_train)),
-        y_train=y_train,#T.cast(theano.shared(y_train), 'int32'),
-        X_valid=X_valid,#theano.shared(lasagne.utils.floatX(X_valid)),
-        y_valid=y_valid,#T.cast(theano.shared(y_valid), 'int32'),
-        X_test=X_test,#theano.shared(lasagne.utils.floatX(X_test)),
-        y_test=y_test,#T.cast(theano.shared(y_test), 'int32'),
+        X_train=theano.shared(lasagne.utils.floatX(X_train)),
+        y_train=T.cast(theano.shared(y_train), 'int32'),
+        X_valid=theano.shared(lasagne.utils.floatX(X_valid)),
+        y_valid=T.cast(theano.shared(y_valid), 'int32'),
+        X_test=theano.shared(lasagne.utils.floatX(X_test)),
+        y_test=T.cast(theano.shared(y_test), 'int32'),
         num_examples_train=X_train.shape[0],
         num_examples_valid=X_valid.shape[0],
         num_examples_test=X_test.shape[0],
@@ -89,6 +85,7 @@ def load_data():
 # returns X of size (N * F, C, H, W)
 # returns y of size (N * F)
 def reshape_for_single_frame(X, y):
+  X = X.transpose(0, 1, 4, 2, 3) 
   X_shape = X.shape
   y_shape = y.shape
   new_X = X.reshape((X_shape[0] * X_shape[1], X_shape[2], X_shape[3], X_shape[4]))
