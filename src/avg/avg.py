@@ -19,7 +19,7 @@ DROPOUT = 0.25
 
 SEED = .42
 
-DATA_PATH = '../../../data/cnn_feats/'
+DATA_PATH = '/root/data/cnn_feats/'
 
 
 def get_data():
@@ -209,9 +209,34 @@ def test(iter_funcs, dataset, batch_size=BATCH_SIZE):
 	avg_test_accuracy = np.mean(batch_accuracies)	
 	return avg_test_accuracy
 
-def main(num_epochs=NUM_EPOCHS):
-	print 'LOADING DATA'
-	dataset = get_data()	
+def run(dataset,
+	num_epochs=NUM_EPOCHS,
+	batch_size=BATCH_SIZE,
+	num_hidden_units=NUM_HIDDEN_UNITS,
+	learning_rate=LEARNING_RATE,
+	momentum=MOMENTUM,
+	reg_strength=REG_STRENGTH,
+	dropout=DROPOUT,
+	TESTING = False
+	):
+	# assign global vars
+	global NUM_EPOCHS
+	global BATCH_SIZE
+	global NUM_HIDDEN_UNITS 
+	global LEARNING_RATE 
+	global MOMENTUM
+	global REG_STRENGTH
+	global DROPOUT
+	NUM_EPOCHS = num_epochs
+	BATCH_SIZE = batch_size
+	NUM_HIDDEN_UNITS = num_hidden_units 
+	LEARNING_RATE = learning_rate 
+	MOMENTUM = momentum
+	REG_STRENGTH = reg_strength
+	DROPOUT = dropout
+
+	to_return = None
+
 	print 'BUILDING MODEL'
 	output_layer = build_model(
 	    input_dim = dataset['input_dim'],
@@ -226,15 +251,42 @@ def main(num_epochs=NUM_EPOCHS):
 		print("\ttraining loss:\t\t%.6f" % epoch['train_loss'])
 		print("\ttraining accuracy:\t\t%.2f %%" % (epoch['train_accuracy'] * 100))
 		print("\tvalidation loss:\t\t%.6f" % epoch['valid_loss'])
-		print("\tvalidation accuracy:\t\t%.2f %%" % (epoch['valid_accuracy'] * 100))
+		validation_acc = (epoch['valid_accuracy'] * 100)
+		print("\tvalidation accuracy:\t\t%.2f %%" % (validation_acc))
+
+		to_return = validation_acc
 
 		if epoch['number'] >= num_epochs:
 			break
+	if TESTING:	
+		print 'TESTING'
+		test_acc = test(iter_funcs, dataset)	
+		print 'test accuracy: \t\t%.2f' % test_acc 
+		to_return = test_acc
+
+	return to_return
+
+
+def main(num_epochs=NUM_EPOCHS,
+	batch_size=BATCH_SIZE,
+	num_hidden_units=NUM_HIDDEN_UNITS,
+	learning_rate=LEARNING_RATE,
+	momentum=MOMENTUM,
+	reg_strength=REG_STRENGTH,
+	dropout=DROPOUT,
+	TESTING = False
+	):
 	
-	print 'TESTING'
-	print 'test accuracy: \t\t%.2f' % test(iter_funcs, dataset)
-
-	return output_layer	
-
+	print 'LOADING DATA'
+	dataset = get_data()	
+	return run(dataset,
+		num_epochs,
+		batch_size,
+		num_hidden_units,
+		learning_rate,
+		momentum,
+		reg_strength,
+		dropout)
+	
 if __name__ == '__main__':
     main()
