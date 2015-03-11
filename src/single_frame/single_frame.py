@@ -1,168 +1,33 @@
-# our imports 
-import load_data
-
-# general imports 
-import itertools
-import time
-
-# scientific imports
+import os, sys, random
 import numpy as np
-import lasagne
-import theano 
-import theano.tensor as T
+from scipy.misc import imread, imresize
+import matplotlib.pyplot as plt
 
-NUM_EPOCHS = 5
-BATCH_SIZE = 100
-NUM_HIDDEN_UNITS = 256
-LEARNING_RATE = 0.00001
-MOMENTUM = 0.9
-REG_STRENGTH = 0.00001
-
-def build_model(input_dim, output_dim, 
-                batch_size=BATCH_SIZE, num_hidden_units=NUM_HIDDEN_UNITS):
-    l_in = lasagne.layers.InputLayer(
-          shape=(batch_size, input_dim[1], input_dim[2], input_dim[3]),
-          )
-    l_conv1 = lasagne.layers.Conv2DLayer(
-            l_in,
-            num_filters=32,
-            filter_size=(5, 5),
-            nonlinearity=lasagne.nonlinearities.rectify,
-            W=lasagne.init.Uniform()
-            )
-    l_pool1 = lasagne.layers.MaxPool2DLayer(l_conv1, ds=(2, 2))
-    l_hidden1 = lasagne.layers.DenseLayer(
-            l_pool1,
-            num_units=num_hidden_units,
-            nonlinearity=lasagne.nonlinearities.rectify,
-            W=lasagne.init.Uniform(),
-            )
-    l_hidden1_dropout = lasagne.layers.DropoutLayer(l_hidden1, p=0.5)
-    l_out = lasagne.layers.DenseLayer(
-            l_hidden1_dropout,
-            num_units=output_dim,
-            nonlinearity=lasagne.nonlinearities.softmax,
-            W=lasagne.init.Uniform(),
-            )
-
-    return l_out
-
-def create_iter_functions(dataset, output_layer,
-                          X_tensor_type=T.tensor4,
-                          batch_size=BATCH_SIZE,
-                          learning_rate=LEARNING_RATE,
-                          momentum=MOMENTUM,
-                          reg_strength=REG_STRENGTH):
-    batch_index = T.iscalar('batch_index')
-    X_batch = X_tensor_type('x')
-    y_batch = T.ivector('y')
-    batch_slice = slice(
-      batch_index * batch_size, (batch_index + 1) * batch_size)
-
-    objective = lasagne.objectives.Objective(output_layer, loss_function=lasagne.objectives.multinomial_nll)
-
-    reg = lasagne.regularization.l2(output_layer) 
-    loss_train = objective.get_loss(X_batch, target=y_batch) + REG_STRENGTH*reg
-    loss_eval = objective.get_loss(X_batch, target=y_batch, deterministic=True)
-
-    pred = T.argmax(output_layer.get_output(X_batch, deterministic=True), axis=1)
-    accuracy = T.mean(T.eq(pred, y_batch))
-
-    all_params = lasagne.layers.get_all_params(output_layer)
-    updates = lasagne.updates.nesterov_momentum(
-      loss_train, all_params, learning_rate, momentum)
-    
-
-    iter_train = theano.function(
-      [batch_index], loss_train,
-      updates=updates,
-      givens={
-        X_batch: dataset['X_train'][batch_slice],
-        y_batch: dataset['y_train'][batch_slice],
-        },
-      )
-
-    iter_valid = theano.function(
-      [batch_index], [loss_eval, accuracy],
-      givens={
-        X_batch: dataset['X_valid'][batch_slice],
-        y_batch: dataset['y_valid'][batch_slice],
-        },
-      )
-
-    iter_test = theano.function(
-      [batch_index], [loss_eval, accuracy],
-      givens={
-        X_batch: dataset['X_test'][batch_slice],
-        y_batch: dataset['y_test'][batch_slice],
-        },
-      )
-
-    return dict(
-      train=iter_train,
-      valid=iter_valid,
-      test=iter_test,
-      )
-
-def train(iter_funcs, dataset, batch_size=BATCH_SIZE):
-    num_batches_train = dataset['num_examples_train'] // batch_size
-    num_batches_valid = dataset['num_examples_valid'] // batch_size
-    num_batches_test = dataset['num_examples_test'] // batch_size
-
-    for epoch in itertools.count(1):
-        batch_train_losses = []
-        for b in range(num_batches_train):
-            print '\tbatch %d of %d' % (b, num_batches_train)
-            tick = time.time()
-            batch_train_loss = iter_funcs['train'](b)
-            batch_train_losses.append(batch_train_loss)
-            toc = time.time()
-            print '\t\t loss: %f' % (batch_train_loss)
-            print '\t\t took %f' % (toc - tick)
-
-        avg_train_loss = np.mean(batch_train_losses)
-
-        batch_valid_losses = []
-        batch_valid_accuracies = []
-        for b in range(num_batches_valid):
-            batch_valid_loss, batch_valid_accuracy = iter_funcs['valid'](b)
-            batch_valid_losses.append(batch_valid_loss)
-            batch_valid_accuracies.append(batch_valid_accuracy)
-
-        avg_valid_loss = np.mean(batch_valid_losses)
-        avg_valid_accuracy = np.mean(batch_valid_accuracies)
-
-        yield {
-            'number': epoch,
-            'train_loss': avg_train_loss,
-            'valid_loss': avg_valid_loss,
-            'valid_accuracy': avg_valid_accuracy,
-            }
-
-def main(num_epochs=NUM_EPOCHS):
-  print 'LOADING DATA'
-  dataset = load_data.load_data()
-  print 'BUILDING MODEL'
-  output_layer = build_model(
-    input_dim = dataset['input_dim'],
-    output_dim = dataset['output_dim'],
-    )
-  print 'CREATING ITER FUNCS'
-  iter_funcs = create_iter_functions(dataset, output_layer)
-
-  print 'TRAINING'
-  for epoch in train(iter_funcs, dataset):
-    print("Epoch %d of %d" % (epoch['number'], num_epochs))
-    print("\ttraining loss:\t\t%.6f" % epoch['train_loss'])
-    print("\tvalidation loss:\t\t%.6f" % epoch['valid_loss'])
-    print("\tvalidation accuracy:\t\t%.2f %%" %
-            (epoch['valid_accuracy'] * 100))
-
-    if epoch['number'] >= num_epochs:
-      break
-
-  return output_layer
+import caffe
+caffe.set_device(0)
 
 
-if __name__ == '__main__':
-    main()
+DATA_PATH = '/root/data/single_frames/'
+
+classes = os.listdir(DATA_PATH)
+
+class_to_idx = {a: i for i, a in enumerate(classes)}
+
+def make_caffe_input_file(path):
+  train_out = open(path + 'train.txt', 'w')
+  val_out = open(path + 'val.txt', 'w')
+  test_out = open(path + 'test.txt', 'w')
+  for c in classes:
+	idx = class_to_idx[c]
+	images = os.listdir(DATA_PATH + c)
+	split_size = len(images)/10
+	for img_idx in range(len(images)):
+		image_loc = DATA_PATH + c + '/' + images[img_idx]
+		if img_idx < split_size: # val
+			val_out.write('%s %d\n' % (image_loc, idx))
+		elif img_idx < 2*split_size: # test
+			test_out.write('%s %d\n' % (image_loc, idx)) 
+		else: # train
+			train_out.write('%s %d\n' % (image_loc, idx))  
+
+make_caffe_input_file('/root/data/caffe_single_frames/train_val_test/')

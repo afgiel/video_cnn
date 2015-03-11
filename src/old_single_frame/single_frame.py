@@ -1,27 +1,25 @@
-import numpy as np
-import os
-import pickle
+# general imports 
 import itertools
 import time
-import random
+import os
+import pickle
 
-import theano
-from theano import tensor as T
+# scientific imports
+import numpy as np
 import lasagne
-from recurrent import LSTMLayer, RecurrentSoftmaxLayer
+import theano 
+import theano.tensor as T
 
-NUM_EPOCHS = 250
-BATCH_SIZE = 256
-NUM_HIDDEN_UNITS = 512
-LEARNING_RATE = 0.0001
+NUM_EPOCHS = 5
+BATCH_SIZE = 100
+NUM_HIDDEN_UNITS = 256
+LEARNING_RATE = 0.00001
 MOMENTUM = 0.9
-REG_STRENGTH = 0.0005
-DROPOUT = 0.6
+REG_STRENGTH = 0.00001
 
 SEED = .42
 
-DATA_PATH = '/root/data/cnn_feats/'
-
+DATA_PATH = '/root/data/matrix_data_rnn/'
 
 def get_data():
 	#get data 
@@ -35,11 +33,14 @@ def get_data():
 		print '\tgetting data for class %s' % class_name
 		class_dir = DATA_PATH + class_name + '/'
 		for pfile in os.listdir(class_dir):
+			if "DS" in pfile:
+				continue
 			f = open(class_dir + pfile, 'r')
 			features = pickle.load(f)
 			f.close()
-			inputs.append(features)
+			inputs.append(features[-1])
 			labels.append(class_index)
+	
 
 	random.shuffle(inputs, lambda: SEED)
 	random.shuffle(labels, lambda: SEED)
@@ -77,25 +78,47 @@ def get_data():
 		num_examples_test=X_test.shape[0],
 		input_dim=X_train.shape,
 		output_dim=len(class_names),
-		)	
+		)
 
 def build_model(input_dim, output_dim, 
                 batch_size=BATCH_SIZE, num_hidden_units=NUM_HIDDEN_UNITS):
-	l_in = lasagne.layers.InputLayer(
-          shape=(batch_size, input_dim[1], input_dim[2]),
+    l_in = lasagne.layers.InputLayer(
+          shape=(batch_size, input_dim[1], input_dim[2], input_dim[3]),
           )
-	l_rec1 = LSTMLayer(
+    l_conv1 = lasagne.layers.Conv2DLayer(
             l_in,
-            num_units=num_hidden_units
-            ) 
-	l_out = RecurrentSoftmaxLayer(
-	    l_rec1,
-	    num_units=output_dim
-	    )
-	return l_out
+            num_filters=32,
+            filter_size=(3, 3),
+            nonlinearity=lasagne.nonlinearities.rectify,
+            W=lasagne.init.Uniform()
+            )
+    l_pool1 = lasagne.layers.MaxPool2DLayer(l_conv1, ds=(2, 2))
+    l_conv2 = lasagne.layers.Conv2DLayer(
+            l_pool1,
+            num_filters=64,
+            filter_size=(3, 3),
+            nonlinearity=lasagne.nonlinearities.rectify,
+            W=lasagne.init.Uniform()
+            )
+    l_pool2 = lasagne.layers.MaxPool2DLayer(l_conv2, ds=(2, 2))
+    l_hidden1 = lasagne.layers.DenseLayer(
+            l_pool2,
+            num_units=num_hidden_units,
+            nonlinearity=lasagne.nonlinearities.rectify,
+            W=lasagne.init.Uniform(),
+            )
+    l_hidden1_dropout = lasagne.layers.DropoutLayer(l_hidden1, p=0.5)
+    l_out = lasagne.layers.DenseLayer(
+            l_hidden1_dropout,
+            num_units=output_dim,
+            nonlinearity=lasagne.nonlinearities.softmax,
+            W=lasagne.init.Uniform(),
+            )
+
+    return l_out
 
 def create_iter_functions(dataset, output_layer,
-                          X_tensor_type=T.tensor3,
+                          X_tensor_type=T.tensor4,
                           batch_size=BATCH_SIZE,
                           learning_rate=LEARNING_RATE,
                           momentum=MOMENTUM,
@@ -116,12 +139,12 @@ def create_iter_functions(dataset, output_layer,
     accuracy = T.mean(T.eq(pred, y_batch))
 
     all_params = lasagne.layers.get_all_params(output_layer)
-    updates = lasagne.updates.rmsprop(
+    updates = lasagne.updates.nesterov_momentum(
       loss_train, all_params, learning_rate, momentum)
     
 
     iter_train = theano.function(
-      [batch_index], [loss_train, accuracy],
+      [batch_index], loss_train,
       updates=updates,
       givens={
         X_batch: dataset['X_train'][batch_slice],
@@ -154,22 +177,20 @@ def create_iter_functions(dataset, output_layer,
 def train(iter_funcs, dataset, batch_size=BATCH_SIZE):
     num_batches_train = dataset['num_examples_train'] // batch_size
     num_batches_valid = dataset['num_examples_valid'] // batch_size
+    num_batches_test = dataset['num_examples_test'] // batch_size
 
     for epoch in itertools.count(1):
         batch_train_losses = []
-	batch_train_accuracies = []
         for b in range(num_batches_train):
-            #print '\tbatch %d of %d' % (b, num_batches_train)
-            #tick = time.time()
-            batch_train_loss, batch_train_accuracy = iter_funcs['train'](b)
+            print '\tbatch %d of %d' % (b, num_batches_train)
+            tick = time.time()
+            batch_train_loss = iter_funcs['train'](b)
             batch_train_losses.append(batch_train_loss)
-	    batch_train_accuracies.append(batch_train_accuracy)
-            #toc = time.time()
-            #print '\t\t loss: %f' % (batch_train_loss)
-            #print '\t\t took %f' % (toc - tick)
+            toc = time.time()
+            print '\t\t loss: %f' % (batch_train_loss)
+            print '\t\t took %f' % (toc - tick)
 
         avg_train_loss = np.mean(batch_train_losses)
-	avg_train_accuracy = np.mean(batch_train_accuracies)
 
         batch_valid_losses = []
         batch_valid_accuracies = []
@@ -184,99 +205,34 @@ def train(iter_funcs, dataset, batch_size=BATCH_SIZE):
         yield {
             'number': epoch,
             'train_loss': avg_train_loss,
-	    'train_accuracy': avg_train_accuracy,
             'valid_loss': avg_valid_loss,
-            'valid_accuracy': avg_valid_accuracy
+            'valid_accuracy': avg_valid_accuracy,
             }
 
-def test(iter_funcs, dataset, batch_size=BATCH_SIZE):
-	num_batches_test = dataset['num_examples_test'] // batch_size
-	batch_accuracies = []
-	for b in range(num_batches_test):
-		batch_loss, batch_accuracy = iter_funcs['test'](b)
-		batch_accuracies.append(batch_accuracy)
-	avg_test_accuracy = np.mean(batch_accuracies)	
-	return avg_test_accuracy
+def main(num_epochs=NUM_EPOCHS):
+  print 'LOADING DATA'
+  dataset = get_data()
+  print 'BUILDING MODEL'
+  output_layer = build_model(
+    input_dim = dataset['input_dim'],
+    output_dim = dataset['output_dim'],
+    )
+  print 'CREATING ITER FUNCS'
+  iter_funcs = create_iter_functions(dataset, output_layer)
 
-def run(dataset,
-	num_epochs=NUM_EPOCHS,
-	batch_size=BATCH_SIZE,
-	num_hidden_units=NUM_HIDDEN_UNITS,
-	learning_rate=LEARNING_RATE,
-	momentum=MOMENTUM,
-	reg_strength=REG_STRENGTH,
-	dropout=DROPOUT,
-	TESTING = False
-	):
-	# assign global vars
-	global NUM_EPOCHS
-	global BATCH_SIZE
-	global NUM_HIDDEN_UNITS 
-	global LEARNING_RATE 
-	global MOMENTUM
-	global REG_STRENGTH
-	global DROPOUT
-	NUM_EPOCHS = num_epochs
-	BATCH_SIZE = batch_size
-	NUM_HIDDEN_UNITS = num_hidden_units 
-	LEARNING_RATE = learning_rate 
-	MOMENTUM = momentum
-	REG_STRENGTH = reg_strength
-	DROPOUT = dropout
+  print 'TRAINING'
+  for epoch in train(iter_funcs, dataset):
+    print("Epoch %d of %d" % (epoch['number'], num_epochs))
+    print("\ttraining loss:\t\t%.6f" % epoch['train_loss'])
+    print("\tvalidation loss:\t\t%.6f" % epoch['valid_loss'])
+    print("\tvalidation accuracy:\t\t%.2f %%" %
+            (epoch['valid_accuracy'] * 100))
 
-	to_return = None
+    if epoch['number'] >= num_epochs:
+      break
 
-	print 'BUILDING MODEL'
-	output_layer = build_model(
-	    input_dim = dataset['input_dim'],
-	    output_dim = dataset['output_dim'],
-	    )
-	print 'CREATING ITER FUNCS'
-	iter_funcs = create_iter_functions(dataset, output_layer)
-
-	print 'TRAINING'
-	for epoch in train(iter_funcs, dataset):
-		print("Epoch %d of %d" % (epoch['number'], num_epochs))
-		print("\ttraining loss:\t\t%.6f" % epoch['train_loss'])
-		print("\ttraining accuracy:\t\t%.2f %%" % (epoch['train_accuracy'] * 100))
-		print("\tvalidation loss:\t\t%.6f" % epoch['valid_loss'])
-		validation_acc = (epoch['valid_accuracy'] * 100)
-		print("\tvalidation accuracy:\t\t%.2f %%" % (validation_acc))
-
-		to_return = validation_acc
-
-		if epoch['number'] >= num_epochs:
-			break
-	if TESTING:	
-		print 'TESTING'
-		test_acc = test(iter_funcs, dataset)	
-		print 'test accuracy: \t\t%.2f' % test_acc 
-		to_return = test_acc
-
-	return to_return
+  return output_layer
 
 
-def main(num_epochs=NUM_EPOCHS,
-	batch_size=BATCH_SIZE,
-	num_hidden_units=NUM_HIDDEN_UNITS,
-	learning_rate=LEARNING_RATE,
-	momentum=MOMENTUM,
-	reg_strength=REG_STRENGTH,
-	dropout=DROPOUT,
-	TESTING = True
-	):
-	
-	print 'LOADING DATA'
-	dataset = get_data()	
-	return run(dataset,
-		num_epochs,
-		batch_size,
-		num_hidden_units,
-		learning_rate,
-		momentum,
-		reg_strength,
-		dropout,
-		TESTING)
-	
 if __name__ == '__main__':
     main()

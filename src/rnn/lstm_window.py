@@ -10,15 +10,17 @@ from theano import tensor as T
 import lasagne
 from recurrent import LSTMLayer, RecurrentSoftmaxLayer
 
-NUM_EPOCHS = 250
+NUM_EPOCHS = 150
 BATCH_SIZE = 256
-NUM_HIDDEN_UNITS = 512
+NUM_HIDDEN_UNITS = 256
 LEARNING_RATE = 0.0001
 MOMENTUM = 0.9
-REG_STRENGTH = 0.0005
-DROPOUT = 0.6
+REG_STRENGTH = 0.01
+DROPOUT = 0.5
 
 SEED = .42
+
+WINDOW_SIZE = 5
 
 DATA_PATH = '/root/data/cnn_feats/'
 
@@ -38,8 +40,10 @@ def get_data():
 			f = open(class_dir + pfile, 'r')
 			features = pickle.load(f)
 			f.close()
-			inputs.append(features)
-			labels.append(class_index)
+			for i in xrange(2):#len(features) - WINDOW_SIZE):
+				window = features[i:i+WINDOW_SIZE]	
+				inputs.append(window)
+				labels.append(class_index)
 
 	random.shuffle(inputs, lambda: SEED)
 	random.shuffle(labels, lambda: SEED)
@@ -63,14 +67,15 @@ def get_data():
  	y_valid = np.array(y_valid)
  	X_test = np.array(X_test)
  	y_test = np.array(y_test)
+	X_train_shape = X_train.shape
 
 	print '\tcreating theano shared vars'
 	return dict(
-		X_train=theano.shared(lasagne.utils.floatX(X_train)),
+		X_train=theano.shared(lasagne.utils.floatX(X_train), borrow=True),	
 		y_train=T.cast(theano.shared(y_train), 'int32'),
-		X_valid=theano.shared(lasagne.utils.floatX(X_valid)),
+		X_valid=theano.shared(lasagne.utils.floatX(X_valid), borrow=True),
 		y_valid=T.cast(theano.shared(y_valid), 'int32'),
-		X_test=theano.shared(lasagne.utils.floatX(X_test)),
+		X_test=theano.shared(lasagne.utils.floatX(X_test), borrow=True),
 		y_test=T.cast(theano.shared(y_test), 'int32'),
 		num_examples_train=X_train.shape[0],
 		num_examples_valid=X_valid.shape[0],
@@ -263,7 +268,7 @@ def main(num_epochs=NUM_EPOCHS,
 	momentum=MOMENTUM,
 	reg_strength=REG_STRENGTH,
 	dropout=DROPOUT,
-	TESTING = True
+	TESTING = False
 	):
 	
 	print 'LOADING DATA'
@@ -275,8 +280,7 @@ def main(num_epochs=NUM_EPOCHS,
 		learning_rate,
 		momentum,
 		reg_strength,
-		dropout,
-		TESTING)
+		dropout)
 	
 if __name__ == '__main__':
     main()

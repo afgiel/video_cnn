@@ -10,7 +10,7 @@ from theano import tensor as T
 import lasagne
 from recurrent import RecurrentLayer, RecurrentSoftmaxLayer
 
-NUM_EPOCHS = 200
+NUM_EPOCHS = 300
 BATCH_SIZE = 256
 NUM_HIDDEN_UNITS = 512
 LEARNING_RATE = 0.00005
@@ -263,7 +263,7 @@ def main(num_epochs=NUM_EPOCHS,
 	momentum=MOMENTUM,
 	reg_strength=REG_STRENGTH,
 	dropout=DROPOUT,
-	TESTING = False
+	TESTING = True
 	):
 	
 	print 'LOADING DATA'
@@ -275,7 +275,8 @@ def main(num_epochs=NUM_EPOCHS,
 		learning_rate,
 		momentum,
 		reg_strength,
-		dropout)
+		dropout,
+		TESTING)
 	
 if __name__ == '__main__':
     main()
