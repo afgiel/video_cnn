@@ -10,7 +10,7 @@ from theano import tensor as T
 import lasagne
 from recurrent import LSTMLayer, RecurrentSoftmaxLayer
 
-NUM_EPOCHS = 500
+NUM_EPOCHS = 250
 BATCH_SIZE = 256
 NUM_HIDDEN_UNITS = 512
 LEARNING_RATE = 0.0001
@@ -88,8 +88,12 @@ def build_model(input_dim, output_dim,
             l_in,
             num_units=num_hidden_units
             ) 
-	l_out = RecurrentSoftmaxLayer(
+	l_rec2 = LSTMLayer(
 	    l_rec1,
+	    num_units=num_hidden_units
+   	    )
+	l_out = RecurrentSoftmaxLayer(
+	    l_rec2,
 	    num_units=output_dim
 	    )
 	return l_out
@@ -250,7 +254,7 @@ def run(dataset,
 	if TESTING:	
 		print 'TESTING'
 		test_acc = test(iter_funcs, dataset)	
-		print 'test accuracy: \t\t%.2f' % test_acc 
+		print 'test accuracy: \t\t%.2f' % test_acc*100 
 		to_return = test_acc
 
 	return to_return

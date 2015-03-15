@@ -8,19 +8,20 @@ import random
 import theano
 from theano import tensor as T
 import lasagne
-from recurrent import LSTMLayer, RecurrentSoftmaxLayer
+from recurrent import RecurrentLayer, RecurrentSoftmaxLayer
 
-NUM_EPOCHS = 500
+NUM_EPOCHS = 300
 BATCH_SIZE = 256
 NUM_HIDDEN_UNITS = 512
-LEARNING_RATE = 0.0001
+LEARNING_RATE = 0.00005
 MOMENTUM = 0.9
-REG_STRENGTH = 0.0005
+REG_STRENGTH = 0.0001
 DROPOUT = 0.6
 
 SEED = .42
 
 DATA_PATH = '/root/data/cnn_feats/'
+
 
 
 def get_data():
@@ -84,12 +85,20 @@ def build_model(input_dim, output_dim,
 	l_in = lasagne.layers.InputLayer(
           shape=(batch_size, input_dim[1], input_dim[2]),
           )
-	l_rec1 = LSTMLayer(
+	l_rec_forward = RecurrentLayer(
             l_in,
             num_units=num_hidden_units
             ) 
+	l_rec_backward = RecurrentLayer(
+            l_in,
+            num_units=num_hidden_units, 
+	    backwards=True
+            ) 
+	l_rec_combined = lasagne.layers.ElemwiseSumLayer(
+	    incomings = (l_rec_forward, l_rec_backward)
+	    )
 	l_out = RecurrentSoftmaxLayer(
-	    l_rec1,
+	    l_rec_combined,
 	    num_units=output_dim
 	    )
 	return l_out
@@ -106,13 +115,14 @@ def create_iter_functions(dataset, output_layer,
     batch_slice = slice(
       batch_index * batch_size, (batch_index + 1) * batch_size)
 
+    mask = T.cast(np.ones((1, 10)), 'float32')
     objective = lasagne.objectives.Objective(output_layer, loss_function=lasagne.objectives.multinomial_nll)
 
     reg = lasagne.regularization.l2(output_layer) 
-    loss_train = objective.get_loss(X_batch, target=y_batch) + REG_STRENGTH*reg
-    loss_eval = objective.get_loss(X_batch, target=y_batch, deterministic=True)
+    loss_train = objective.get_loss(X_batch, target=y_batch, mask=mask) + REG_STRENGTH*reg
+    loss_eval = objective.get_loss(X_batch, target=y_batch, deterministic=True, mask=mask)
 
-    pred = T.argmax(output_layer.get_output(X_batch, deterministic=True), axis=1)
+    pred = T.argmax(output_layer.get_output(X_batch, deterministic=True, mask=mask), axis=1)
     accuracy = T.mean(T.eq(pred, y_batch))
 
     all_params = lasagne.layers.get_all_params(output_layer)
@@ -250,7 +260,7 @@ def run(dataset,
 	if TESTING:	
 		print 'TESTING'
 		test_acc = test(iter_funcs, dataset)	
-		print 'test accuracy: \t\t%.2f' % test_acc 
+		print 'test accuracy: \t\t%.2f' % test_acc*100 
 		to_return = test_acc
 
 	return to_return
